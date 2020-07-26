@@ -1,4 +1,11 @@
-urls = [url1, url2, ... ]
+from functools import reduce
+url1='weibo.com/qasak'
+url2='github.com/qasak'
+url3='bilibili.com/qasak'
+url4='bilibili.com/xiaoming'
+
+
+urls = [url1, url2, url3,url4]
 # We get all domains here
 domains = map(lambda u: u.split('/')[0], urls)
 
