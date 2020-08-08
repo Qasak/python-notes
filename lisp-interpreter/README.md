@@ -11,7 +11,7 @@ Scheme语法与大多数其他编程语言不同。
 | Java                                                         |      | Scheme                                                       |
 | ------------------------------------------------------------ | ---- | ------------------------------------------------------------ |
 |                                                              |      |                                                              |
-| **if** (x.val() > 0) {<br/> **return** fn(A[i] + 3 * i,<br/>      **new** String[] {"one", "two"});<br/>} |      | (**if** (> (val x) 0)  (fn (+ (aref A i) (* 3 i))    (**quote** (one two))) |
+| **if** (x.val() > 0) { **return** fn(A[i] + 3 * i,      **new** String[] {"one", "two"});} |      | (**if** (> (val x) 0)  (fn (+ (aref A i) (* 3 i))    (**quote** (one two))) |
 
 Java有各种各样的语法约定（关键字、中缀运算符(infix operators)、三种括号、运算符优先级、点表示法、引号、逗号、分号），但是Scheme语法要简单得多：
 
@@ -93,7 +93,7 @@ Lispy计算器是Scheme的一个子集，只使用五种语法形式（两种原
 
 让我们明确Scheme对象的表示：
 
-```scheme
+```Python
 Symbol = str              # A Scheme Symbol is implemented as a Python str
 Number = (int, float)     # A Scheme Number is implemented as a Python int or float
 Atom   = (Symbol, Number) # A Scheme Atom is a Symbol or Number
@@ -123,4 +123,54 @@ def tokenize(chars: str) -> list:
 ['(', 'begin', '(', 'define', 'r', '10', ')', '(', '*', 'pi', '(', '*', 'r', 'r', ')', ')', ')']
 ```
 
-我们的函数 `parse` 将以一个程序的字符串作为输入, 调用 `tokenize` 来得到token列表, 然后调用 `read_from_tokens` 组合成一颗抽象语法树. `read_from_tokens` 查看第一个标记; 如果是一个 `')'` 说明语法错误. 如果是一个`'('`, 那么我们开始构建一个子表达式列表，直到找到匹配的 `')'`. 任何非圆括号token都必须是symbol或number. We'll let Python make the distinction between them: for each non-paren token, first try to interpret it as an int, then as a float, and if it is neither of those, it must be a symbol. Here is the parser:
+我们的函数 `parse` 将以一个程序的字符串作为输入, 调用 `tokenize` 来得到token列表, 然后调用 `read_from_tokens` 组合成一颗抽象语法树. 
+
+`read_from_tokens` 查看第一个标记; 如果是一个 `')'` 说明语法错误. 如果是一个`'('`, 那么我们开始构建一个子表达式列表，直到找到匹配的 `')'`. 任何非圆括号token都必须是symbol或number.
+
+ 我们让Python来区分它们：对于每个非括号标记，首先尝试将其解释为int，然后解释为float，如果两者都不是，那么它一定是一个symbol. 
+
+```python
+def parse(program: str) -> Exp:
+    "Read a Scheme expression from a string."
+    return read_from_tokens(tokenize(program))
+
+def read_from_tokens(tokens: list) -> Exp:
+    if len(tokens) == 0:
+        raise SyntaxError('unexpected EOF')
+    token = tokens.pop(0)
+    if token == '(':
+        L=[]
+        while tokens[0] != ')':
+            L.append(read_from_tokens(tokens))
+        tokens.pop(0) # pop off ')'
+        return L
+    elif token == ')':
+        raise SyntaxError('unexpected )')
+    else:
+        return atom(token)
+    
+def atom(token: str) -> Atom:
+    try: return int(token)
+    except ValueError:
+        try: return float(token)
+        except ValueError:
+            return Symbol(token)
+```
+
+## Evaluation: `eval`
+
+We are now ready for the implementation of `eval`. As a refresher, we repeat the table of Lispy Calculator forms:
+
+
+
+| Expression                                                   | Syntax                      | Semantics and Example                                        |
+| ------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------ |
+| [variable reference](http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-7.html#%_sec_4.1.1) | *symbol*                    | A symbol is interpreted as a variable name; its value is the variable's value. Example: `r` ⇒ `10` (assuming `r` was previously defined to be 10) |
+| [constant literal](http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-7.html#%_sec_4.1.2) | *number*                    | A number evaluates to itself. Examples: `12 ⇒ 12` *or* `-3.45e+6 ⇒ -3.45e+6` |
+| [conditional](http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-7.html#%_sec_4.1.5) | `(if` *test conseq alt*`)`  | Evaluate *test*; if true, evaluate and return *conseq*; otherwise *alt*. Example: `(if (> 10 20) (+ 1 1) (+ 3 3)) ⇒ 6` |
+| [definition](http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-8.html#%_sec_5.2) | `(define` *symbol* *exp*`)` | Define a new variable and give it the value of evaluating the expression *exp*. Examples: `(define r 10)` |
+| [procedure call](http://www.schemers.org/Documents/Standards/R5RS/HTML/r5rs-Z-H-7.html#%_sec_4.1.3) | `(`*proc arg...*`)`         | If *proc* is anything other than one of the symbols `if, define, `or `quote` then it is treated as a procedure. Evaluate *proc* and all the *args*, and then the procedure is applied to the list of *arg* values. Example: `(sqrt (* 2 8)) ⇒ 4.0` |
+
+
+
+Here is the code for `eval`, which closely follows the table:
